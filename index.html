@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Reasonable Doubt — what an AI-detector flag actually tells you</title>
+<title>Reasonable Doubt, what an AI-detector flag actually tells you</title>
 <meta name="description" content="A Bayesian check for academic-misconduct decisions. Set your base rate and your standard of proof before you see the detector score.">
 <style>
 :root{
@@ -161,6 +161,44 @@ input[type=range]:focus-visible{outline:3px solid var(--marker);outline-offset:3
   border-left:3px solid var(--ink);padding:12px 0 12px 15px;margin:18px 0;
   font-size:.9rem;color:var(--ink-2);max-width:60ch;background:var(--card)
 }
+
+/* "Why am I being asked this?" disclosure. Closed by default so the
+   step stays short, open for anyone who wants the reasoning. */
+.why{max-width:60ch;margin:14px 0 4px;border-top:1px solid var(--rule)}
+.why summary{
+  font-family:var(--mono);font-size:.72rem;letter-spacing:.04em;color:var(--ink-2);
+  cursor:pointer;padding:9px 0;list-style:none;display:flex;align-items:center;gap:8px
+}
+.why summary::-webkit-details-marker{display:none}
+.why summary::before{content:"+";font-weight:600;color:var(--ink);width:9px}
+.why[open] summary::before{content:"\2212"}
+.why summary:hover{color:var(--ink)}
+.why summary:focus-visible{outline:3px solid var(--marker);outline-offset:2px}
+.why-body{font-size:.88rem;color:var(--ink-2);padding:0 0 14px;line-height:1.55}
+.why-body p{margin:0 0 .7em;max-width:none}
+.why-body p:last-child{margin-bottom:0}
+
+/* Shown on a source card once its sliders no longer match the published figures */
+.modflag{
+  display:none;font-family:var(--mono);font-size:.62rem;letter-spacing:.08em;text-transform:uppercase;
+  background:var(--marker);color:var(--ink);border:1.5px solid var(--ink);padding:1px 6px;margin-left:8px
+}
+.src.modified .modflag{display:inline-block}
+
+/* Standard-of-proof reference under the threshold slider */
+.benchmark{
+  display:flex;gap:10px;align-items:flex-start;max-width:60ch;margin:14px 0 0;
+  font-size:.86rem;color:var(--ink-2);border-left:3px solid var(--marker);padding-left:13px
+}
+.benchmark b{font-family:var(--mono);font-weight:600;color:var(--ink)}
+
+/* The action the tool recommends, not just the number */
+.nextstep{border:1.5px solid var(--ink);background:var(--card);padding:16px 18px;margin:20px 0;max-width:62ch}
+.nextstep h3{
+  font-family:var(--mono);font-size:.7rem;letter-spacing:.12em;text-transform:uppercase;
+  margin:0 0 9px;color:var(--ink-2);font-weight:600
+}
+.nextstep p{margin:0;font-size:1rem;color:var(--ink);max-width:none}
 .note strong{color:var(--ink)}
 .note.hidden{display:none}
 .cite{font-family:var(--mono);font-size:.68rem;letter-spacing:.02em;color:var(--ink-3);display:block;margin-top:7px}
@@ -251,7 +289,7 @@ input[type=range]:focus-visible{outline:3px solid var(--marker);outline-offset:3
     <p class="eyebrow"><b>Reasonable Doubt</b> &nbsp;/&nbsp; an evidence check for academic misconduct decisions</p>
     <h1>A flag is not<br>a finding.</h1>
     <p class="standfirst">A detector says a submission is 98% AI-written. That number is <strong>P(flag | cheating)</strong>. The question in front of you is <strong>P(cheating | flag)</strong>. They are not the same number, and on the published figures they are not even close.</p>
-    <p class="byline">Seven steps, in order. The detector score stays hidden until step four — that ordering is the point.</p>
+    <p class="byline">Seven steps, in order. The detector score stays hidden until step four, and that ordering is the point.</p>
   </header>
 
   <div class="grid-2">
@@ -292,7 +330,7 @@ input[type=range]:focus-visible{outline:3px solid var(--marker);outline-offset:3
       <!-- 1 -->
       <section class="step" id="s1">
         <div class="step-head"><span class="step-num">01</span><h2>How common is this, really?</h2></div>
-        <p>Before you look at any score: out of 100 submissions in your module, how many do you think contain undeclared AI-generated text?</p>
+        <p>Before you look at any score, how many out of 100 submissions in your module do you think contain undeclared AI-generated text?</p>
         <div class="control">
           <div class="control-top">
             <span class="control-label">Your estimate</span>
@@ -303,11 +341,19 @@ input[type=range]:focus-visible{outline:3px solid var(--marker);outline-offset:3
         </div>
         <button class="btn" id="priorLock">Commit this estimate</button>
 
+        <details class="why">
+          <summary>Why does the base rate matter more than the score?</summary>
+          <div class="why-body">
+            <p>A detector tells you how often it fires on work that did use AI. It cannot tell you how often the work in front of you used AI, because that also depends on how many people in your cohort do it at all.</p>
+            <p>If almost nobody cheats, even an accurate detector spends most of its alarms on innocent people, simply because there are so many more of them to get wrong.</p>
+          </div>
+        </details>
+
         <div class="note hidden" id="priorNote">
           <strong id="priorCompare"></strong>
           <span id="priorGap"></span>
-          <span class="cite">HEPI/Kortext Student Generative AI Survey 2026, n ≈ 10,000 UK students. 12% report putting AI-generated text directly into assessed work — up from 8% in 2025 and 3% in 2024.</span>
-          <p class="tight" style="margin-bottom:0">Move the slider again if you want a different number. It is your estimate, not the survey's — but you now have to disagree with the survey on purpose.</p>
+          <span class="cite">HEPI/Kortext Student Generative AI Survey 2026, n ≈ 10,000 UK students. 12% report putting AI-generated text directly into assessed work, up from 8% in 2025 and 3% in 2024. That figure is self-reported, so treat it as a floor rather than a measurement.</span>
+          <p class="tight" style="margin-bottom:0">Move the slider again if you want a different number. It is your estimate, not the survey's, but you now have to disagree with the survey on purpose.</p>
         </div>
       </section>
 
@@ -321,9 +367,16 @@ input[type=range]:focus-visible{outline:3px solid var(--marker);outline-offset:3
           <label class="opt"><input type="checkbox" id="adjPrior" data-lr="3"><span class="opt-txt">This student has a previous upheld finding<small>odds &times; 3</small></span></label>
         </div>
         <div class="note">
-          Working base rate: <strong id="adjOut">12 in 100</strong>.
+          Your working base rate is <strong id="adjOut">12 in 100</strong>.
           <span class="cite">Multipliers are illustrative, not measured. They are here so the base rate can be defended as a judgement rather than smuggled in as a fact.</span>
         </div>
+        <details class="why">
+          <summary>Why am I being asked this before I see the score?</summary>
+          <div class="why-body">
+            <p>Because how suspicious a case looks depends on how common the behaviour is to begin with. The same flag means something different in a supervised exam than in an unsupervised essay written over three weeks.</p>
+            <p>These multipliers are illustrative rather than measured, and they are shown as numbers on purpose. A number you can see is one you can argue with. An unspoken hunch about "this kind of student" is not.</p>
+          </div>
+        </details>
         <button class="btn" id="adjNext">Continue</button>
       </section>
 
@@ -340,6 +393,23 @@ input[type=range]:focus-visible{outline:3px solid var(--marker);outline-offset:3
           <div class="scale"><span>50%</span><span>75%</span><span>99%</span></div>
         </div>
         <p class="human" id="threshHuman"></p>
+
+        <div class="benchmark">
+          <span>
+            Most UK universities decide misconduct on the <b>balance of probabilities</b>, which is anything above <b>50%</b>.
+            UCL puts it plainly in its Academic Manual, where adjudicators "should apply 'on the balance of probabilities' as the standard of proof".
+            <span id="benchGap"></span>
+          </span>
+        </div>
+
+        <details class="why">
+          <summary>Why does the threshold get locked?</summary>
+          <div class="why-body">
+            <p>Because a standard you set after seeing the answer is not a standard. Kunda showed that people reach the conclusion they want by quietly building a justification for it, without ever feeling dishonest. A bar you can still move is a bar that will move.</p>
+            <p>You can start a new case at any point. You just cannot lower this one to fit the evidence you are about to see.</p>
+          </div>
+        </details>
+
         <button class="btn" id="threshLock">Lock this threshold</button>
         <p class="tight" style="font-family:var(--mono);font-size:.7rem;color:var(--ink-3);letter-spacing:.04em">Locked thresholds cannot be edited. Start a new case to change it.</p>
       </section>
@@ -347,46 +417,53 @@ input[type=range]:focus-visible{outline:3px solid var(--marker);outline-offset:3
       <!-- 4 -->
       <section class="step locked" id="s4">
         <div class="step-head"><span class="step-num">04</span><h2>Now the detector</h2></div>
-        <p>The submission has been flagged. Before that flag means anything, you have to say how good the detector is — and the published answers disagree with each other enormously.</p>
+        <p>The submission has been flagged. Before that flag means anything, you have to say how good the detector is, and the published answers disagree with each other enormously.</p>
 
         <div class="sources" role="radiogroup" aria-label="Which accuracy figures to use">
           <label class="src sel">
             <input type="radio" name="src" value="vendor" checked>
             <span class="src-in">
-              <span class="src-name">The vendor's own figures<span class="src-fig">98% sens · 1% FPR</span></span>
+              <span class="src-name">The vendor's own figures<span class="src-fig">98% sens · 1% FPR<span class="modflag">edited</span></span></span>
               <span class="src-why">Turnitin reports a document-level false positive rate below 1% where 20% or more of the document is flagged. Below that 20% mark it reports a higher incidence of false positives and has not published a rate.</span>
             </span>
           </label>
           <label class="src">
             <input type="radio" name="src" value="independent">
             <span class="src-in">
-              <span class="src-name">Independent testing<span class="src-fig">50% sens · 20% FPR</span></span>
-              <span class="src-why">Weber-Wulff et al. tested 14 tools and concluded they are "neither accurate nor reliable": accuracy on AI text around 50%, none above 80% overall, human text correctly identified above 80%. The 20% here is the worst false positive rate consistent with that last figure — drag it down to test a kinder reading.</span>
+              <span class="src-name">Independent testing<span class="src-fig">50% sens · 20% FPR<span class="modflag">edited</span></span></span>
+              <span class="src-why">Weber-Wulff et al. tested 14 tools and concluded they are "neither accurate nor reliable": accuracy on AI text around 50%, none above 80% overall, human text correctly identified above 80%. The 20% here is the worst false positive rate consistent with that last figure. Drag it down to test a kinder reading.</span>
             </span>
           </label>
           <label class="src">
             <input type="radio" name="src" value="nonnative">
             <span class="src-in">
-              <span class="src-name">The student is not a native English speaker<span class="src-fig">98% sens · 61% FPR</span></span>
-              <span class="src-why">Liang et al. ran seven detectors over 91 human-written TOEFL essays: average false positive rate 61.22%, while essays by US school students were classified almost perfectly. Sensitivity is left at the vendor's own 98% here, so the detector is being given its best case.</span>
+              <span class="src-name">The student is not a native English speaker<span class="src-fig">98% sens · 61% FPR<span class="modflag">edited</span></span></span>
+              <span class="src-why">Liang et al. ran seven detectors over 91 human-written TOEFL essays and found an average false positive rate of 61.22%, while essays by US school students were classified almost perfectly. Sensitivity is left at the vendor's own 98% here, so the detector is being given its best case.</span>
             </span>
           </label>
         </div>
 
         <div class="control">
           <div class="control-top">
-            <span class="control-label">Sensitivity — flags actual AI use</span>
+            <span class="control-label">Sensitivity (flags actual AI use)</span>
             <span class="readout" id="sensOut">98%</span>
           </div>
-          <input type="range" id="sensRange" min="10" max="100" value="98" aria-label="Sensitivity: percentage of AI-written work the detector flags">
+          <input type="range" id="sensRange" min="10" max="100" value="98" aria-label="Sensitivity, the percentage of AI-written work the detector flags">
         </div>
         <div class="control">
           <div class="control-top">
-            <span class="control-label">False positive rate — flags honest work</span>
+            <span class="control-label">False positive rate (flags honest work)</span>
             <span class="readout" id="fprOut">1%</span>
           </div>
-          <input type="range" id="fprRange" min="0" max="70" value="1" aria-label="False positive rate: percentage of honest work the detector flags">
+          <input type="range" id="fprRange" min="0" max="70" value="1" aria-label="False positive rate, the percentage of honest work the detector flags">
         </div>
+        <details class="why">
+          <summary>Can I move the sliders after picking a source?</summary>
+          <div class="why-body">
+            <p>Yes, and that is the point. The three buttons load figures somebody actually published. The sliders let you ask what happens if those figures are wrong, which is the part no vendor sheet will tell you.</p>
+            <p>Once you move a slider the card is marked "edited", so you always know whether you are still standing on published numbers or on your own assumption.</p>
+          </div>
+        </details>
         <button class="btn" id="evNext">See what the flag is worth</button>
       </section>
 
@@ -399,9 +476,13 @@ input[type=range]:focus-visible{outline:3px solid var(--marker);outline-offset:3
           <p class="verdict-sub">probability this flagged student used AI</p>
           <div class="verdict-line" id="verdictLine"></div>
         </div>
+        <div class="nextstep">
+          <h3>What to do now</h3>
+          <p id="nextStep"></p>
+        </div>
         <p id="swingLine"></p>
         <div class="note">
-          <strong>The disagreement is not about this student.</strong> Hold everything else fixed and switch between the three sources in question 04: the same flag on the same submission is worth <b id="swingVendor">—</b>, <b id="swingInd">—</b> or <b id="swingNn">—</b>. Nobody has told you which set of figures your institution's procedure assumes.
+          <strong>The disagreement is not about this student.</strong> Hold everything else fixed and switch between the three sources in question 04. The same flag on the same submission is worth <b id="swingVendor">—</b>, <b id="swingInd">—</b> or <b id="swingNn">—</b>. Nobody has told you which set of figures your institution's procedure assumes.
         </div>
         <button class="btn" id="resNext">What would clear your bar?</button>
       </section>
@@ -417,7 +498,7 @@ input[type=range]:focus-visible{outline:3px solid var(--marker);outline-offset:3
           <label class="opt"><input type="checkbox" class="ev2" data-lr="2.5"><span class="opt-txt">Sharp break from a supervised writing sample by the same student<small>moderate · odds &times; 2.5</small></span></label>
         </div>
         <div class="note">
-          <strong>A second detector is not a second opinion.</strong> Running another tool over the same text does not multiply in — the two tools react to the same surface features, so their errors arrive together. Treating correlated evidence as independent is the fastest way to manufacture certainty you have not earned. Every item above is listed because it comes from a different source than the text itself.
+          <strong>A second detector is not a second opinion.</strong> Running another tool over the same text does not multiply in, because the two tools react to the same surface features, so their errors arrive together. Treating correlated evidence as independent is the fastest way to manufacture certainty you have not earned. Every item above is listed because it comes from a different source than the text itself.
         </div>
         <div class="verdict">
           <span class="stamp no" id="stamp2">Below your bar</span>
@@ -459,7 +540,7 @@ input[type=range]:focus-visible{outline:3px solid var(--marker);outline-offset:3
       <li>Turnitin. (2023). <em>Understanding the false positive rate for sentences of our AI writing detection capability</em>. <a href="https://www.turnitin.com/blog/understanding-the-false-positive-rate-for-sentences-of-our-ai-writing-detection-capability">turnitin.com</a></li>
       <li>Weber-Wulff, D., Anohina-Naumeca, A., Bjelobaba, S., Foltýnek, T., Guerrero-Dib, J., Popoola, O., Šigut, P., &amp; Waddington, L. (2023). Testing of detection tools for AI-generated text. <em>International Journal for Educational Integrity, 19</em>(26). <a href="https://doi.org/10.1007/s40979-023-00146-z">doi.org/10.1007/s40979-023-00146-z</a></li>
     </ol>
-    <p class="colophon">This tool estimates one quantity only: the probability that a flagged submission contains undeclared AI text, given a base rate and a stated detector accuracy. It is a reasoning aid for the person deciding whether to open a case. It is not a determination of misconduct, and it does not replace an institution's procedure or a student's right to respond.</p>
+    <p class="colophon">This tool estimates one quantity only, which is the probability that a flagged submission contains undeclared AI text, given a base rate and a stated detector accuracy. It is a reasoning aid for the person deciding whether to open a case. It is not a determination of misconduct, and it does not replace an institution's procedure or a student's right to respond.</p>
   </section>
 
 </div>
@@ -538,7 +619,7 @@ input[type=range]:focus-visible{outline:3px solid var(--marker);outline-offset:3
     return odds / (1 + odds);
   }
 
-  /* Never round a live probability to a flat 0% or 100% — in a tool about
+  /* Never round a live probability to a flat 0% or 100%. In a tool about
      uncertainty those read as "impossible" and "certain", which is the error. */
   var pct = function(x){
     if (x > 0 && x < 0.005) return '<1%';
@@ -611,7 +692,7 @@ input[type=range]:focus-visible{outline:3px solid var(--marker);outline-offset:3
 
     $('verdictLine').innerHTML = over
       ? 'You set your bar at <b>' + state.threshold + '%</b>. This flag reaches <b>' + pct(p) +
-        '</b>. On your own stated standard, this is enough to open a case — and roughly <b>' + c.fp +
+        '</b>. On your own stated standard, this is enough to open a case, and roughly <b>' + c.fp +
         '</b> of the ' + c.flagged + ' flagged students in a cohort this size still did nothing wrong.'
       : 'You set your bar at <b>' + state.threshold + '%</b>. This flag reaches <b>' + pct(p) +
         '</b>. It does not clear the standard you set for yourself sixty seconds ago, before you knew which way it would fall.';
@@ -622,6 +703,10 @@ input[type=range]:focus-visible{outline:3px solid var(--marker);outline-offset:3
     $('swingVendor').textContent = pct(v);
     $('swingInd').textContent = pct(i);
     $('swingNn').textContent = pct(n);
+
+    $('nextStep').innerHTML = over
+      ? 'This clears the bar you set, so a referral is defensible. Before you file it, give the student the chance to explain the work in their own words, and put the case note below in the file so the standard you used is on the record.'
+      : 'A referral is not the proportionate next step here. Ask the student to talk you through their argument and show you their drafts. That conversation is also evidence, and unlike a second detector it is independent of the text.';
 
     var spread = Math.round((Math.max(v, i, n) - Math.min(v, i, n)) * 100);
     $('swingLine').innerHTML = 'Across the three published sources the same flag spans <b>' + spread +
@@ -711,7 +796,7 @@ input[type=range]:focus-visible{outline:3px solid var(--marker);outline-offset:3
     var hi = at(Math.min(0.5, cur * 2));
     var stable = (lo * 100 >= state.threshold) === (hi * 100 >= state.threshold);
     $('robustLine').innerHTML = stable
-      ? 'Halve your base rate or double it and the answer stays on the same side of your bar: <b>' +
+      ? 'Halve your base rate or double it and the answer stays on the same side of your bar, from <b>' +
         pct(lo) + '</b> to <b>' + pct(hi) + '</b>. Your conclusion does not depend on getting the base rate exactly right.'
       : 'Your conclusion is fragile. Between <b>' + pct(lo) + '</b> and <b>' + pct(hi) +
         '</b> it crosses your bar, so halving or doubling the base rate flips the decision. Get a firmer base rate before you rely on this.';
@@ -727,7 +812,7 @@ input[type=range]:focus-visible{outline:3px solid var(--marker);outline-offset:3
       if (boxes[i].checked) extra.push(boxes[i].parentNode.querySelector('.opt-txt').childNodes[0].textContent.trim());
     }
     $('caseNote').textContent =
-      'REASONABLE DOUBT — CASE NOTE\n' +
+      'REASONABLE DOUBT, CASE NOTE\n' +
       new Date().toISOString().slice(0, 10) + '\n' +
       '------------------------------------------\n' +
       'Base rate assumed        ' + Math.round(adjustedPrior() * 100) + ' in 100\n' +
@@ -736,12 +821,12 @@ input[type=range]:focus-visible{outline:3px solid var(--marker);outline-offset:3
       '  sensitivity            ' + state.sens + '%\n' +
       '  false positive rate    ' + state.fpr + '%\n' +
       '------------------------------------------\n' +
-      'Per 1,000 submissions: ' + c.flagged + ' flagged, of which\n' +
+      'Per 1,000 submissions, ' + c.flagged + ' flagged, of which\n' +
       c.tp + ' used AI and ' + c.fp + ' did not.\n\n' +
       'Detector alone           ' + pct(c.post) + '\n' +
-      (extra.length ? 'Further evidence:\n  - ' + extra.join('\n  - ') + '\n' : 'Further evidence: none\n') +
+      (extra.length ? 'Further evidence\n  - ' + extra.join('\n  - ') + '\n' : 'Further evidence           none\n') +
       'Overall                  ' + pct(p2) + '\n\n' +
-      'OUTCOME: ' + (over ? 'meets' : 'does NOT meet') + ' the threshold set before the score was seen.\n\n' +
+      'OUTCOME\n' + (over ? 'Meets' : 'Does NOT meet') + ' the threshold set before the score was seen.\n\n' +
       'The threshold was recorded before the detector reading was\n' +
       'viewed. This note is a reasoning record, not a finding.';
   }
@@ -770,7 +855,7 @@ input[type=range]:focus-visible{outline:3px solid var(--marker);outline-offset:3
     var diff = g - HEPI;
     $('priorCompare').textContent = 'You said ' + g + ' in 100. The survey says 12.';
     $('priorGap').textContent = diff > 4
-      ? ' You are ' + (g / HEPI).toFixed(1) + '× above the reported figure — the usual direction, because the cases you remember are the ones that surfaced, not the ones that did not.'
+      ? ' You are ' + (g / HEPI).toFixed(1) + '× above the reported figure, which is the usual direction, because the cases you remember are the ones that surfaced, not the ones that did not.'
       : (diff < -4
         ? ' You are below the reported figure. Worth asking what makes your module unusual.'
         : ' That is close to the reported figure.');
@@ -789,14 +874,15 @@ input[type=range]:focus-visible{outline:3px solid var(--marker);outline-offset:3
   function humanise(t){
     var wrong = Math.round((100 - t) / 1);
     var oneIn = (100 / (100 - t));
-    return 'At ' + t + '%, you are saying: if I open a case every time the evidence looks like this, about ' +
-      wrong + ' in every 100 people I report will have done nothing wrong — roughly one in ' +
-      oneIn.toFixed(1) + '. That is the price of the standard, and it is the same price whether or not you say it out loud.';
+    return 'At ' + t + '%, you are accepting that if you open a case every time the evidence looks like this, about ' +
+      wrong + ' in every 100 people you report will have done nothing wrong, roughly one in ' +
+      (oneIn % 1 === 0 ? oneIn : oneIn.toFixed(1)) + '. That is the price of the standard, and it is the same price whether or not you say it out loud.';
   }
   $('threshRange').addEventListener('input', function(){
     state.threshold = +this.value;
     $('threshOut').textContent = this.value + '%';
     $('threshHuman').textContent = humanise(state.threshold);
+    benchmark();
     paint();
   });
   $('threshHuman').textContent = humanise(80);
@@ -811,8 +897,22 @@ input[type=range]:focus-visible{outline:3px solid var(--marker);outline-offset:3
   /* ── step 4 ── */
   function syncSourceCards(){
     document.querySelectorAll('.src').forEach(function(l){
-      l.classList.toggle('sel', l.querySelector('input').checked);
+      var input = l.querySelector('input');
+      var preset = PRESETS[input.value];
+      var edited = input.checked && (state.sens !== preset.sens || state.fpr !== preset.fpr);
+      l.classList.toggle('sel', input.checked);
+      l.classList.toggle('modified', edited);
     });
+  }
+
+  /* How the user's own bar compares with the standard their institution uses */
+  function benchmark(){
+    var d = state.threshold - 50;
+    $('benchGap').innerHTML = d > 0
+      ? ' You have set yours <b>' + d + ' points higher</b>, so you are asking more of the evidence than your institution does.'
+      : (d < 0
+        ? ' You have set yours <b>below</b> that, which no misconduct procedure would accept.'
+        : ' You have set yours exactly there.');
   }
   document.querySelectorAll('input[name=src]').forEach(function(r){
     r.addEventListener('change', function(){
@@ -825,10 +925,10 @@ input[type=range]:focus-visible{outline:3px solid var(--marker);outline-offset:3
     });
   });
   $('sensRange').addEventListener('input', function(){
-    state.sens = +this.value; $('sensOut').textContent = this.value + '%'; paint();
+    state.sens = +this.value; $('sensOut').textContent = this.value + '%'; syncSourceCards(); paint();
   });
   $('fprRange').addEventListener('input', function(){
-    state.fpr = +this.value; $('fprOut').textContent = this.value + '%'; paint();
+    state.fpr = +this.value; $('fprOut').textContent = this.value + '%'; syncSourceCards(); paint();
   });
   $('evNext').addEventListener('click', function(){ unlock('s5', 5); });
 
@@ -845,13 +945,14 @@ input[type=range]:focus-visible{outline:3px solid var(--marker);outline-offset:3
     } else {
       var r = document.createRange(); r.selectNode($('caseNote'));
       window.getSelection().removeAllRanges(); window.getSelection().addRange(r);
-      btn.textContent = 'Selected — press ⌘C';
+      btn.textContent = 'Selected, press ⌘C';
     }
   });
 
   $('resetBtn').addEventListener('click', function(){ location.reload(); });
 
   syncSourceCards();
+  benchmark();
   paint();
 })();
 </script>
