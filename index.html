@@ -1,0 +1,859 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reasonable Doubt — what an AI-detector flag actually tells you</title>
+<meta name="description" content="A Bayesian check for academic-misconduct decisions. Set your base rate and your standard of proof before you see the detector score.">
+<style>
+:root{
+  /* Carbon-copy stock: the paper universities actually print referral forms on */
+  --stock:#D9DEE0;
+  --stock-2:#CDD4D7;
+  --card:#E7EBEC;
+  --ink:#14191E;
+  --ink-2:#3E4A52;
+  --ink-3:#6B7981;
+  --rule:#B3BCC0;
+
+  /* Reserved meanings. Red is only ever a wrongly flagged person. */
+  --flag:#C8372A;        /* false positive  */
+  --machine:#1C7C8C;     /* true positive   */
+  --machine-pale:#A9C6CC;/* false negative  */
+  --quiet:#B9C1C4;       /* true negative   */
+  --marker:#E8C547;      /* the reader's own threshold */
+
+  --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, "Cascadia Mono", Consolas, "Liberation Mono", monospace;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --serif: Iowan Old Style, "Palatino Linotype", Palatino, Georgia, serif;
+
+  --step:clamp(1.4rem,3.5vw,2rem);
+}
+
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0;
+  background:var(--stock);
+  color:var(--ink);
+  font-family:var(--sans);
+  font-size:16px;
+  line-height:1.55;
+  /* faint horizontal ruling, like a form */
+  background-image:repeating-linear-gradient(to bottom,transparent 0 31px,rgba(20,25,30,.035) 31px 32px);
+}
+.wrap{max-width:1240px;margin:0 auto;padding:0 clamp(16px,4vw,40px) 96px}
+
+/* ───────────────── masthead ───────────────── */
+.masthead{padding:clamp(40px,7vw,84px) 0 clamp(28px,4vw,44px);border-bottom:1.5px solid var(--ink)}
+.eyebrow{
+  font-family:var(--mono);font-size:.68rem;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--ink-2);margin:0 0 clamp(16px,3vw,26px)
+}
+.eyebrow b{font-weight:600;color:var(--ink)}
+h1{
+  font-family:var(--mono);font-weight:600;
+  font-size:clamp(2.1rem,7.2vw,4.4rem);
+  line-height:.98;letter-spacing:-.035em;margin:0;text-wrap:balance
+}
+.standfirst{
+  max-width:52ch;margin:clamp(18px,3vw,28px) 0 0;
+  font-size:clamp(1rem,1.9vw,1.18rem);color:var(--ink-2)
+}
+.standfirst strong{color:var(--ink);font-weight:600}
+.byline{
+  margin-top:clamp(20px,3vw,30px);font-family:var(--mono);font-size:.7rem;
+  letter-spacing:.06em;color:var(--ink-3);max-width:60ch
+}
+
+/* ───────────────── layout ───────────────── */
+.grid-2{
+  display:grid;grid-template-columns:minmax(0,400px) minmax(0,1fr);
+  gap:clamp(28px,4vw,60px);align-items:start;padding-top:clamp(28px,4vw,48px)
+}
+@media (max-width:900px){ .grid-2{grid-template-columns:1fr;gap:0} }
+
+/* ───────────────── the cohort ───────────────── */
+.cohort{position:sticky;top:16px}
+.cohort-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:10px}
+.cohort-title{font-family:var(--mono);font-size:.68rem;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-2)}
+.cohort-n{font-family:var(--mono);font-size:.68rem;letter-spacing:.08em;color:var(--ink-3)}
+
+.marks{
+  display:grid;grid-template-columns:repeat(40,1fr);
+  gap:1px;width:100%;
+  border:1.5px solid var(--ink);padding:5px;background:var(--card)
+}
+.mark{aspect-ratio:1/1;background:var(--quiet);transition:background-color .34s ease}
+.mark.tp{background:var(--machine)}
+.mark.fp{background:var(--flag)}
+.mark.fn{background:var(--machine-pale)}
+.mark.tn{background:var(--quiet)}
+.mark.idle{background:var(--stock-2)}
+@media (prefers-reduced-motion:reduce){ .mark{transition:none} }
+
+.legend{display:grid;grid-template-columns:1fr 1fr;gap:4px 14px;margin-top:12px}
+.leg{display:flex;gap:8px;align-items:flex-start;font-size:.76rem;color:var(--ink-2);line-height:1.35}
+.swatch{width:11px;height:11px;flex:none;margin-top:3px;border:1px solid rgba(20,25,30,.25)}
+.leg b{font-family:var(--mono);font-weight:600;color:var(--ink);font-size:.76rem}
+.leg.is-key{color:var(--ink)}
+
+/* flagged-only bar */
+.flagged{margin-top:20px;opacity:.35;transition:opacity .3s ease}
+.flagged.on{opacity:1}
+.flagged-label{font-family:var(--mono);font-size:.66rem;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-2);margin-bottom:26px}
+.bar{position:relative;height:44px;border:1.5px solid var(--ink);background:var(--card);display:flex}
+.bar-tp{background:var(--machine);transition:width .34s ease}
+.bar-fp{background:var(--flag);transition:width .34s ease}
+.thresh{position:absolute;top:-7px;bottom:-7px;width:3px;background:var(--marker);box-shadow:0 0 0 1.5px var(--ink);transition:left .34s ease;display:none}
+.thresh.on{display:block}
+.thresh::after{
+  content:attr(data-label);position:absolute;left:50%;top:-19px;transform:translateX(-50%);
+  font-family:var(--mono);font-size:.6rem;letter-spacing:.06em;white-space:nowrap;color:var(--ink);
+  background:var(--marker);padding:1px 5px;border:1.5px solid var(--ink)
+}
+.bar-read{display:flex;justify-content:space-between;margin-top:8px;font-family:var(--mono);font-size:.72rem;color:var(--ink-2)}
+@media (prefers-reduced-motion:reduce){ .bar-tp,.bar-fp,.thresh{transition:none} }
+
+/* ───────────────── steps ───────────────── */
+.step{border-top:1px solid var(--rule);padding:clamp(26px,4vw,38px) 0}
+.step:first-child{border-top:none;padding-top:0}
+.step.locked{opacity:.32;pointer-events:none;filter:grayscale(.55)}
+.step-head{display:flex;gap:14px;align-items:baseline;margin-bottom:6px}
+.step-num{
+  font-family:var(--mono);font-size:.72rem;font-weight:600;letter-spacing:.06em;
+  color:var(--ink);border:1.5px solid var(--ink);padding:1px 6px;flex:none;line-height:1.5
+}
+.step h2{font-family:var(--mono);font-weight:600;font-size:var(--step);letter-spacing:-.025em;margin:0;line-height:1.12}
+.step p{margin:.65em 0;max-width:60ch;color:var(--ink-2)}
+.step p.tight{margin-top:.3em}
+.human{font-family:var(--serif);font-style:italic;font-size:1.12rem;line-height:1.45;color:var(--ink);max-width:52ch;margin:1.1em 0;padding-left:16px;border-left:3px solid var(--marker)}
+
+/* controls */
+.control{margin:22px 0 6px}
+.control-top{display:flex;justify-content:space-between;align-items:baseline;gap:16px;margin-bottom:6px}
+.control-label{font-family:var(--mono);font-size:.7rem;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-2)}
+.readout{font-family:var(--mono);font-size:1.5rem;font-weight:600;letter-spacing:-.02em}
+input[type=range]{
+  -webkit-appearance:none;appearance:none;width:100%;background:transparent;height:26px;margin:0;cursor:pointer
+}
+input[type=range]::-webkit-slider-runnable-track{height:6px;background:var(--stock-2);border:1.5px solid var(--ink)}
+input[type=range]::-moz-range-track{height:6px;background:var(--stock-2);border:1.5px solid var(--ink)}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;width:16px;height:26px;background:var(--ink);margin-top:-12px;border:none;border-radius:0
+}
+input[type=range]::-moz-range-thumb{width:16px;height:26px;background:var(--ink);border:none;border-radius:0}
+input[type=range]:focus-visible{outline:3px solid var(--marker);outline-offset:3px}
+.scale{display:flex;justify-content:space-between;font-family:var(--mono);font-size:.66rem;color:var(--ink-3);margin-top:2px}
+
+.btn{
+  font-family:var(--mono);font-size:.78rem;font-weight:600;letter-spacing:.04em;
+  background:var(--ink);color:var(--stock);border:1.5px solid var(--ink);
+  padding:9px 16px;cursor:pointer;margin-top:14px
+}
+.btn:hover{background:transparent;color:var(--ink)}
+.btn:focus-visible{outline:3px solid var(--marker);outline-offset:2px}
+.btn.ghost{background:transparent;color:var(--ink)}
+.btn.ghost:hover{background:var(--ink);color:var(--stock)}
+.btn[disabled]{opacity:.4;cursor:not-allowed}
+
+.note{
+  border-left:3px solid var(--ink);padding:12px 0 12px 15px;margin:18px 0;
+  font-size:.9rem;color:var(--ink-2);max-width:60ch;background:var(--card)
+}
+.note strong{color:var(--ink)}
+.note.hidden{display:none}
+.cite{font-family:var(--mono);font-size:.68rem;letter-spacing:.02em;color:var(--ink-3);display:block;margin-top:7px}
+
+/* checkbox rows */
+.opts{display:flex;flex-direction:column;gap:2px;margin:18px 0 4px;max-width:60ch}
+.opt{display:flex;gap:12px;align-items:flex-start;padding:11px 12px;border:1.5px solid transparent;cursor:pointer}
+.opt:hover{border-color:var(--rule);background:var(--card)}
+.opt input{margin:3px 0 0;width:16px;height:16px;flex:none;accent-color:var(--ink)}
+.opt input:focus-visible{outline:3px solid var(--marker);outline-offset:2px}
+.opt-txt{font-size:.94rem}
+.opt-txt small{display:block;color:var(--ink-3);font-family:var(--mono);font-size:.68rem;letter-spacing:.04em;margin-top:2px}
+
+/* source cards */
+.sources{display:flex;flex-direction:column;gap:10px;margin:20px 0 6px}
+.src{
+  display:block;border:1.5px solid var(--rule);background:var(--card);padding:14px 16px;cursor:pointer;
+  transition:border-color .15s ease
+}
+.src:hover{border-color:var(--ink-2)}
+.src.sel{border-color:var(--ink);border-width:1.5px;box-shadow:inset 4px 0 0 var(--ink)}
+.src input{position:absolute;opacity:0;width:0;height:0}
+.src input:focus-visible + .src-in{outline:3px solid var(--marker);outline-offset:4px}
+.src-name{font-family:var(--mono);font-size:.82rem;font-weight:600;letter-spacing:-.01em;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.src-fig{color:var(--ink-2);font-weight:400}
+.src-why{font-size:.85rem;color:var(--ink-2);margin-top:6px;line-height:1.45}
+
+/* verdict */
+.verdict{border:1.5px solid var(--ink);background:var(--card);padding:clamp(18px,3vw,26px);margin:22px 0}
+.verdict-fig{font-family:var(--mono);font-size:clamp(2.6rem,9vw,4.2rem);font-weight:600;line-height:.92;letter-spacing:-.04em;margin:0}
+.verdict-sub{font-family:var(--mono);font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-2);margin:8px 0 0}
+.verdict-line{margin-top:18px;padding-top:16px;border-top:1.5px solid var(--ink);font-size:1.02rem;max-width:56ch}
+.verdict-line b{font-family:var(--mono);font-weight:600}
+.stamp{
+  display:inline-block;font-family:var(--mono);font-size:.78rem;font-weight:600;letter-spacing:.1em;
+  text-transform:uppercase;border:2px solid currentColor;padding:5px 11px;margin-bottom:14px
+}
+.stamp.no{color:var(--flag)}
+.stamp.yes{color:var(--machine)}
+
+/* sweep chart */
+.sweep{border:1.5px solid var(--ink);background:var(--card);padding:14px;margin:20px 0}
+.sweep svg{display:block;width:100%;height:auto}
+
+/* case note */
+.casenote{
+  font-family:var(--mono);font-size:.76rem;line-height:1.6;white-space:pre-wrap;
+  border:1.5px solid var(--ink);background:var(--card);padding:16px;margin:18px 0;max-width:66ch;overflow-x:auto
+}
+
+/* refs */
+.refs{border-top:1.5px solid var(--ink);margin-top:clamp(40px,6vw,72px);padding-top:26px}
+.refs h2{font-family:var(--mono);font-size:.72rem;letter-spacing:.14em;text-transform:uppercase;margin:0 0 16px;color:var(--ink-2);font-weight:600}
+.refs ol{margin:0;padding-left:1.3em;max-width:78ch}
+.refs li{font-size:.84rem;color:var(--ink-2);margin-bottom:9px;line-height:1.5}
+.refs a{color:var(--ink);text-decoration-thickness:1px;text-underline-offset:2px}
+.colophon{margin-top:26px;font-family:var(--mono);font-size:.68rem;letter-spacing:.04em;color:var(--ink-3);max-width:70ch;line-height:1.6}
+
+.sr{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+
+/* ───────────────── narrow screens ─────────────────
+   Kept last so these win over the base rules above.
+   The cohort panel stays sticky, so it has to stay short: the grid
+   reflows to 50 x 20 — same 1,000 marks, roughly half the height. */
+@media (max-width:900px){
+  .cohort{
+    position:sticky;top:0;z-index:20;padding:10px 0 8px;
+    background:var(--stock);border-bottom:1.5px solid var(--ink);margin-bottom:6px
+  }
+  .cohort-head{margin-bottom:7px}
+  .marks{grid-template-columns:repeat(50,1fr);padding:3px}
+  .legend{gap:2px 10px;margin-top:8px}
+  .leg{font-size:.7rem;line-height:1.25}
+  .leg b{font-size:.7rem}
+  .swatch{width:9px;height:9px;margin-top:2px}
+  .flagged{margin-top:11px}
+  .flagged-label{margin-bottom:19px;font-size:.6rem}
+  .bar{height:28px}
+  .bar-read{margin-top:5px;font-size:.66rem}
+  .thresh::after{top:-17px;font-size:.55rem}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="masthead">
+    <p class="eyebrow"><b>Reasonable Doubt</b> &nbsp;/&nbsp; an evidence check for academic misconduct decisions</p>
+    <h1>A flag is not<br>a finding.</h1>
+    <p class="standfirst">A detector says a submission is 98% AI-written. That number is <strong>P(flag | cheating)</strong>. The question in front of you is <strong>P(cheating | flag)</strong>. They are not the same number, and on the published figures they are not even close.</p>
+    <p class="byline">Seven steps, in order. The detector score stays hidden until step four — that ordering is the point.</p>
+  </header>
+
+  <div class="grid-2">
+
+    <!-- ─────────── the cohort ─────────── -->
+    <aside class="cohort" aria-label="Cohort visualisation">
+      <div class="cohort-head">
+        <span class="cohort-title">The cohort</span>
+        <span class="cohort-n" id="cohortN">1,000 submissions</span>
+      </div>
+      <div class="marks" id="marks" role="img" aria-labelledby="marksDesc"></div>
+      <p class="sr" id="marksDesc">A grid of 1,000 squares, one per submission, coloured by whether the submission used AI and whether the detector flagged it.</p>
+
+      <div class="legend" id="legend">
+        <div class="leg is-key"><span class="swatch" style="background:var(--flag)"></span><span><b id="lgFp">—</b> flagged, did nothing wrong</span></div>
+        <div class="leg"><span class="swatch" style="background:var(--machine)"></span><span><b id="lgTp">—</b> flagged, used AI</span></div>
+        <div class="leg"><span class="swatch" style="background:var(--machine-pale)"></span><span><b id="lgFn">—</b> used AI, not flagged</span></div>
+        <div class="leg"><span class="swatch" style="background:var(--quiet)"></span><span><b id="lgTn">—</b> clean, not flagged</span></div>
+      </div>
+
+      <div class="flagged" id="flaggedWrap">
+        <p class="flagged-label">Only the flagged submissions</p>
+        <div class="bar">
+          <div class="bar-tp" id="barTp" style="width:0"></div>
+          <div class="bar-fp" id="barFp" style="width:0"></div>
+          <div class="thresh" id="threshLine" data-label="your bar"></div>
+        </div>
+        <div class="bar-read">
+          <span id="barLeft">—</span>
+          <span id="barRight">—</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- ─────────── steps ─────────── -->
+    <main>
+
+      <!-- 1 -->
+      <section class="step" id="s1">
+        <div class="step-head"><span class="step-num">01</span><h2>How common is this, really?</h2></div>
+        <p>Before you look at any score: out of 100 submissions in your module, how many do you think contain undeclared AI-generated text?</p>
+        <div class="control">
+          <div class="control-top">
+            <span class="control-label">Your estimate</span>
+            <span class="readout" id="priorOut">30 in 100</span>
+          </div>
+          <input type="range" id="priorRange" min="1" max="80" value="30" aria-label="Submissions in 100 containing undeclared AI text">
+          <div class="scale"><span>1</span><span>40</span><span>80</span></div>
+        </div>
+        <button class="btn" id="priorLock">Commit this estimate</button>
+
+        <div class="note hidden" id="priorNote">
+          <strong id="priorCompare"></strong>
+          <span id="priorGap"></span>
+          <span class="cite">HEPI/Kortext Student Generative AI Survey 2026, n ≈ 10,000 UK students. 12% report putting AI-generated text directly into assessed work — up from 8% in 2025 and 3% in 2024.</span>
+          <p class="tight" style="margin-bottom:0">Move the slider again if you want a different number. It is your estimate, not the survey's — but you now have to disagree with the survey on purpose.</p>
+        </div>
+      </section>
+
+      <!-- 2 -->
+      <section class="step locked" id="s2">
+        <div class="step-head"><span class="step-num">02</span><h2>What is different about this case?</h2></div>
+        <p>Still before the score. Only conditions you knew about before the submission was flagged.</p>
+        <div class="opts">
+          <label class="opt"><input type="checkbox" id="adjTakehome" data-lr="1.5"><span class="opt-txt">Unsupervised take-home assessment<small>odds &times; 1.5</small></span></label>
+          <label class="opt"><input type="checkbox" id="adjSupervised" data-lr="0.2"><span class="opt-txt">Written under supervision, in person<small>odds &times; 0.2</small></span></label>
+          <label class="opt"><input type="checkbox" id="adjPrior" data-lr="3"><span class="opt-txt">This student has a previous upheld finding<small>odds &times; 3</small></span></label>
+        </div>
+        <div class="note">
+          Working base rate: <strong id="adjOut">12 in 100</strong>.
+          <span class="cite">Multipliers are illustrative, not measured. They are here so the base rate can be defended as a judgement rather than smuggled in as a fact.</span>
+        </div>
+        <button class="btn" id="adjNext">Continue</button>
+      </section>
+
+      <!-- 3 -->
+      <section class="step locked" id="s3">
+        <div class="step-head"><span class="step-num">03</span><h2>Set your standard of proof</h2></div>
+        <p>How certain would you need to be before you open a formal misconduct case? Decide now, while you still do not know the answer.</p>
+        <div class="control">
+          <div class="control-top">
+            <span class="control-label">Your threshold</span>
+            <span class="readout" id="threshOut">80%</span>
+          </div>
+          <input type="range" id="threshRange" min="50" max="99" value="80" aria-label="Certainty required before opening a formal case">
+          <div class="scale"><span>50%</span><span>75%</span><span>99%</span></div>
+        </div>
+        <p class="human" id="threshHuman"></p>
+        <button class="btn" id="threshLock">Lock this threshold</button>
+        <p class="tight" style="font-family:var(--mono);font-size:.7rem;color:var(--ink-3);letter-spacing:.04em">Locked thresholds cannot be edited. Start a new case to change it.</p>
+      </section>
+
+      <!-- 4 -->
+      <section class="step locked" id="s4">
+        <div class="step-head"><span class="step-num">04</span><h2>Now the detector</h2></div>
+        <p>The submission has been flagged. Before that flag means anything, you have to say how good the detector is — and the published answers disagree with each other enormously.</p>
+
+        <div class="sources" role="radiogroup" aria-label="Which accuracy figures to use">
+          <label class="src sel">
+            <input type="radio" name="src" value="vendor" checked>
+            <span class="src-in">
+              <span class="src-name">The vendor's own figures<span class="src-fig">98% sens · 1% FPR</span></span>
+              <span class="src-why">Turnitin reports a document-level false positive rate below 1% where 20% or more of the document is flagged. Below that 20% mark it reports a higher incidence of false positives and has not published a rate.</span>
+            </span>
+          </label>
+          <label class="src">
+            <input type="radio" name="src" value="independent">
+            <span class="src-in">
+              <span class="src-name">Independent testing<span class="src-fig">50% sens · 20% FPR</span></span>
+              <span class="src-why">Weber-Wulff et al. tested 14 tools and concluded they are "neither accurate nor reliable": accuracy on AI text around 50%, none above 80% overall, human text correctly identified above 80%. The 20% here is the worst false positive rate consistent with that last figure — drag it down to test a kinder reading.</span>
+            </span>
+          </label>
+          <label class="src">
+            <input type="radio" name="src" value="nonnative">
+            <span class="src-in">
+              <span class="src-name">The student is not a native English speaker<span class="src-fig">98% sens · 61% FPR</span></span>
+              <span class="src-why">Liang et al. ran seven detectors over 91 human-written TOEFL essays: average false positive rate 61.22%, while essays by US school students were classified almost perfectly. Sensitivity is left at the vendor's own 98% here, so the detector is being given its best case.</span>
+            </span>
+          </label>
+        </div>
+
+        <div class="control">
+          <div class="control-top">
+            <span class="control-label">Sensitivity — flags actual AI use</span>
+            <span class="readout" id="sensOut">98%</span>
+          </div>
+          <input type="range" id="sensRange" min="10" max="100" value="98" aria-label="Sensitivity: percentage of AI-written work the detector flags">
+        </div>
+        <div class="control">
+          <div class="control-top">
+            <span class="control-label">False positive rate — flags honest work</span>
+            <span class="readout" id="fprOut">1%</span>
+          </div>
+          <input type="range" id="fprRange" min="0" max="70" value="1" aria-label="False positive rate: percentage of honest work the detector flags">
+        </div>
+        <button class="btn" id="evNext">See what the flag is worth</button>
+      </section>
+
+      <!-- 5 -->
+      <section class="step locked" id="s5">
+        <div class="step-head"><span class="step-num">05</span><h2>What the flag is worth</h2></div>
+        <div class="verdict">
+          <span class="stamp no" id="stamp">Below your bar</span>
+          <p class="verdict-fig" id="postOut">—</p>
+          <p class="verdict-sub">probability this flagged student used AI</p>
+          <div class="verdict-line" id="verdictLine"></div>
+        </div>
+        <p id="swingLine"></p>
+        <div class="note">
+          <strong>The disagreement is not about this student.</strong> Hold everything else fixed and switch between the three sources in question 04: the same flag on the same submission is worth <b id="swingVendor">—</b>, <b id="swingInd">—</b> or <b id="swingNn">—</b>. Nobody has told you which set of figures your institution's procedure assumes.
+        </div>
+        <button class="btn" id="resNext">What would clear your bar?</button>
+      </section>
+
+      <!-- 6 -->
+      <section class="step locked" id="s6">
+        <div class="step-head"><span class="step-num">06</span><h2>What would actually clear your bar</h2></div>
+        <p id="needLine"></p>
+        <div class="opts">
+          <label class="opt"><input type="checkbox" class="ev2" data-lr="9"><span class="opt-txt">Document version history shows the text pasted in whole<small>strong · odds &times; 9</small></span></label>
+          <label class="opt"><input type="checkbox" class="ev2" data-lr="6"><span class="opt-txt">In a short oral check, the student cannot explain their own argument<small>strong · odds &times; 6</small></span></label>
+          <label class="opt"><input type="checkbox" class="ev2" data-lr="3"><span class="opt-txt">Cited sources do not exist<small>moderate · odds &times; 3</small></span></label>
+          <label class="opt"><input type="checkbox" class="ev2" data-lr="2.5"><span class="opt-txt">Sharp break from a supervised writing sample by the same student<small>moderate · odds &times; 2.5</small></span></label>
+        </div>
+        <div class="note">
+          <strong>A second detector is not a second opinion.</strong> Running another tool over the same text does not multiply in — the two tools react to the same surface features, so their errors arrive together. Treating correlated evidence as independent is the fastest way to manufacture certainty you have not earned. Every item above is listed because it comes from a different source than the text itself.
+        </div>
+        <div class="verdict">
+          <span class="stamp no" id="stamp2">Below your bar</span>
+          <p class="verdict-fig" id="post2Out">—</p>
+          <p class="verdict-sub">after the evidence you have ticked</p>
+          <div class="verdict-line" id="verdict2Line"></div>
+        </div>
+        <button class="btn" id="needNext">How wrong could I be?</button>
+      </section>
+
+      <!-- 7 -->
+      <section class="step locked" id="s7">
+        <div class="step-head"><span class="step-num">07</span><h2>How wrong could you be?</h2></div>
+        <p>Your base rate was a judgement. This is what happens to your conclusion if that judgement was wrong, holding the detector figures fixed.</p>
+        <div class="sweep">
+          <svg id="sweep" viewBox="0 0 600 272" role="img" aria-labelledby="sweepDesc"></svg>
+          <p class="sr" id="sweepDesc">A line chart of the probability of AI use against the assumed base rate, with your threshold marked.</p>
+        </div>
+        <p id="robustLine"></p>
+
+        <div class="step-head" style="margin-top:34px"><span class="step-num">08</span><h2>Case note</h2></div>
+        <p>A record of what you assumed, written before you knew the answer. Paste it into the file.</p>
+        <pre class="casenote" id="caseNote">—</pre>
+        <button class="btn" id="copyBtn">Copy case note</button>
+        <button class="btn ghost" id="resetBtn">Start a new case</button>
+      </section>
+
+    </main>
+  </div>
+
+  <section class="refs">
+    <h2>Sources</h2>
+    <ol>
+      <li>Gigerenzer, G., &amp; Hoffrage, U. (1995). How to improve Bayesian reasoning without instruction: Frequency formats. <em>Psychological Review, 102</em>(4), 684–704.</li>
+      <li>Higher Education Policy Institute &amp; Kortext. (2026). <em>Student Generative AI Survey 2026</em> (HEPI Report 199). <a href="https://www.hepi.ac.uk/reports/student-generative-ai-survey-2026/">hepi.ac.uk</a></li>
+      <li>Kahneman, D., &amp; Tversky, A. (1973). On the psychology of prediction. <em>Psychological Review, 80</em>(4), 237–251.</li>
+      <li>Liang, W., Yuksekgonul, M., Mao, Y., Wu, E., &amp; Zou, J. (2023). GPT detectors are biased against non-native English writers. <em>Patterns, 4</em>(7), 100779. <a href="https://www.cell.com/patterns/fulltext/S2666-3899(23)00130-7">cell.com</a></li>
+      <li>Thompson, W. C., &amp; Schumann, E. L. (1987). Interpretation of statistical evidence in criminal trials: The prosecutor's fallacy and the defense attorney's fallacy. <em>Law and Human Behavior, 11</em>(3), 167–187.</li>
+      <li>Turnitin. (2023). <em>Understanding the false positive rate for sentences of our AI writing detection capability</em>. <a href="https://www.turnitin.com/blog/understanding-the-false-positive-rate-for-sentences-of-our-ai-writing-detection-capability">turnitin.com</a></li>
+      <li>Weber-Wulff, D., Anohina-Naumeca, A., Bjelobaba, S., Foltýnek, T., Guerrero-Dib, J., Popoola, O., Šigut, P., &amp; Waddington, L. (2023). Testing of detection tools for AI-generated text. <em>International Journal for Educational Integrity, 19</em>(26). <a href="https://doi.org/10.1007/s40979-023-00146-z">doi.org/10.1007/s40979-023-00146-z</a></li>
+    </ol>
+    <p class="colophon">This tool estimates one quantity only: the probability that a flagged submission contains undeclared AI text, given a base rate and a stated detector accuracy. It is a reasoning aid for the person deciding whether to open a case. It is not a determination of misconduct, and it does not replace an institution's procedure or a student's right to respond.</p>
+  </section>
+
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  var N = 1000;
+  var HEPI = 12;
+
+  var PRESETS = {
+    vendor:      {sens:98, fpr:1},
+    independent: {sens:50, fpr:20},
+    nonnative:   {sens:98, fpr:61}
+  };
+
+  var state = {
+    basePrior: 30,
+    threshold: 80,
+    thresholdLocked: false,
+    sens: 98,
+    fpr: 1,
+    stage: 1,
+    extraLR: 1
+  };
+
+  var $ = function(id){ return document.getElementById(id); };
+
+  /* ── build the cohort once ── */
+  var marks = [];
+  (function build(){
+    var frag = document.createDocumentFragment();
+    for (var i = 0; i < N; i++){
+      var d = document.createElement('div');
+      d.className = 'mark idle';
+      frag.appendChild(d);
+      marks.push(d);
+    }
+    $('marks').appendChild(frag);
+  })();
+
+  /* ── maths ── */
+  function adjustedPrior(){
+    var p = state.basePrior / 100;
+    var odds = p / (1 - p);
+    var boxes = [$('adjTakehome'), $('adjSupervised'), $('adjPrior')];
+    for (var i = 0; i < boxes.length; i++){
+      if (boxes[i] && boxes[i].checked) odds *= parseFloat(boxes[i].dataset.lr);
+    }
+    return odds / (1 + odds);
+  }
+
+  function counts(prior, sens, fpr){
+    var ai = Math.round(prior * N);
+    var tp = Math.round(ai * sens / 100);
+    var fn = ai - tp;
+    var honest = N - ai;
+    var fp = Math.round(honest * fpr / 100);
+    var tn = honest - fp;
+    var flagged = tp + fp;
+    return {
+      ai: ai, tp: tp, fn: fn, honest: honest, fp: fp, tn: tn, flagged: flagged,
+      post: flagged ? tp / flagged : 0
+    };
+  }
+
+  function posteriorFor(sens, fpr){
+    return counts(adjustedPrior(), sens, fpr).post;
+  }
+
+  function withExtra(p, lr){
+    if (p <= 0) return 0;
+    if (p >= 1) return 1;
+    var odds = (p / (1 - p)) * lr;
+    return odds / (1 + odds);
+  }
+
+  /* Never round a live probability to a flat 0% or 100% — in a tool about
+     uncertainty those read as "impossible" and "certain", which is the error. */
+  var pct = function(x){
+    if (x > 0 && x < 0.005) return '<1%';
+    if (x < 1 && x > 0.995) return '>99%';
+    return Math.round(x * 100) + '%';
+  };
+
+  /* ── render ── */
+  function paint(){
+    var prior = adjustedPrior();
+    var c = counts(prior, state.sens, state.fpr);
+    var showEvidence = state.stage >= 5;
+
+    for (var i = 0; i < N; i++){
+      var cls;
+      if (!showEvidence){
+        cls = state.stage >= 2 ? (i < c.ai ? 'fn' : 'tn') : 'idle';
+      } else if (i < c.tp)                    { cls = 'tp'; }
+      else if (i < c.tp + c.fp)               { cls = 'fp'; }
+      else if (i < c.tp + c.fp + c.fn)        { cls = 'fn'; }
+      else                                    { cls = 'tn'; }
+      if (marks[i].className !== 'mark ' + cls) marks[i].className = 'mark ' + cls;
+    }
+
+    $('lgFp').textContent = showEvidence ? c.fp : '—';
+    $('lgTp').textContent = showEvidence ? c.tp : '—';
+    $('lgFn').textContent = state.stage >= 2 ? (showEvidence ? c.fn : c.ai) : '—';
+    $('lgTn').textContent = state.stage >= 2 ? (showEvidence ? c.tn : N - c.ai) : '—';
+    $('cohortN').textContent = showEvidence
+      ? c.flagged.toLocaleString('en-GB') + ' flagged'
+      : '1,000 submissions';
+
+    /* flagged-only bar */
+    var wrap = $('flaggedWrap');
+    if (showEvidence && c.flagged > 0){
+      wrap.classList.add('on');
+      var tpW = (c.tp / c.flagged) * 100;
+      $('barTp').style.width = tpW + '%';
+      $('barFp').style.width = (100 - tpW) + '%';
+      $('barLeft').textContent = c.tp + ' used AI';
+      $('barRight').textContent = c.fp + ' did not';
+      if (state.thresholdLocked){
+        $('threshLine').classList.add('on');
+        $('threshLine').style.left = state.threshold + '%';
+        $('threshLine').setAttribute('data-label', 'your bar · ' + state.threshold + '%');
+      }
+    } else {
+      wrap.classList.remove('on');
+      $('barTp').style.width = '0';
+      $('barFp').style.width = '0';
+      $('barLeft').textContent = '—';
+      $('barRight').textContent = '—';
+    }
+
+    $('adjOut').textContent = Math.round(prior * 100) + ' in 100';
+
+    if (state.stage >= 5) renderVerdict(c);
+    if (state.stage >= 6) renderExtra(c);
+    if (state.stage >= 7) { renderSweep(); renderNote(c); }
+  }
+
+  function renderVerdict(c){
+    var p = c.post;
+    var over = p * 100 >= state.threshold;
+    $('postOut').textContent = pct(p);
+    $('postOut').style.color = over ? 'var(--machine)' : 'var(--flag)';
+    var st = $('stamp');
+    st.textContent = over ? 'Clears your bar' : 'Below your bar';
+    st.className = 'stamp ' + (over ? 'yes' : 'no');
+
+    $('verdictLine').innerHTML = over
+      ? 'You set your bar at <b>' + state.threshold + '%</b>. This flag reaches <b>' + pct(p) +
+        '</b>. On your own stated standard, this is enough to open a case — and roughly <b>' + c.fp +
+        '</b> of the ' + c.flagged + ' flagged students in a cohort this size still did nothing wrong.'
+      : 'You set your bar at <b>' + state.threshold + '%</b>. This flag reaches <b>' + pct(p) +
+        '</b>. It does not clear the standard you set for yourself sixty seconds ago, before you knew which way it would fall.';
+
+    var v = posteriorFor(PRESETS.vendor.sens, PRESETS.vendor.fpr);
+    var i = posteriorFor(PRESETS.independent.sens, PRESETS.independent.fpr);
+    var n = posteriorFor(PRESETS.nonnative.sens, PRESETS.nonnative.fpr);
+    $('swingVendor').textContent = pct(v);
+    $('swingInd').textContent = pct(i);
+    $('swingNn').textContent = pct(n);
+
+    var spread = Math.round((Math.max(v, i, n) - Math.min(v, i, n)) * 100);
+    $('swingLine').innerHTML = 'Across the three published sources the same flag spans <b>' + spread +
+      ' percentage points</b>. The detector reading never changed. Only the evidence about the detector did.';
+  }
+
+  function renderExtra(c){
+    var boxes = document.querySelectorAll('.ev2');
+    var lr = 1, n = 0;
+    for (var i = 0; i < boxes.length; i++){
+      if (boxes[i].checked){ lr *= parseFloat(boxes[i].dataset.lr); n++; }
+    }
+    state.extraLR = lr;
+    var p2 = withExtra(c.post, lr);
+    var over = p2 * 100 >= state.threshold;
+
+    $('post2Out').textContent = pct(p2);
+    $('post2Out').style.color = over ? 'var(--machine)' : 'var(--flag)';
+    var st = $('stamp2');
+    st.textContent = over ? 'Clears your bar' : 'Below your bar';
+    st.className = 'stamp ' + (over ? 'yes' : 'no');
+
+    $('verdict2Line').innerHTML = n === 0
+      ? 'Nothing ticked. This is still the detector on its own.'
+      : (over
+        ? 'With ' + n + ' further ' + (n === 1 ? 'source' : 'sources') + ' of evidence you are at <b>' +
+          pct(p2) + '</b>, above your <b>' + state.threshold + '%</b> bar. Each item is independent of the text the detector read.'
+        : 'With ' + n + ' further ' + (n === 1 ? 'source' : 'sources') + ' you reach <b>' + pct(p2) +
+          '</b>, still under your <b>' + state.threshold + '%</b> bar.');
+
+    var need = (state.threshold / 100) / (1 - state.threshold / 100) / (c.post / (1 - c.post));
+    $('needLine').innerHTML = c.post > 0 && need > 1
+      ? 'To move from <b>' + pct(c.post) + '</b> to your <b>' + state.threshold +
+        '%</b> bar, the evidence you add has to be roughly <b>' + (need < 100 ? need.toFixed(1) : '100+') +
+        '&times;</b> more likely if the student did use AI than if they did not. Tick what you actually hold.'
+      : 'You are already at or above your bar on the detector alone. Anything below is corroboration, not rescue.';
+  }
+
+  function renderSweep(){
+    var w = 600, h = 272, pad = {t: 18, r: 16, b: 48, l: 44};
+    var iw = w - pad.l - pad.r, ih = h - pad.t - pad.b;
+    var X = function(v){ return pad.l + (v / 0.5) * iw; };
+    var Y = function(v){ return pad.t + (1 - v) * ih; };
+    /* the curve must show the conclusion actually reached, extra evidence included */
+    var at = function(pr){ return withExtra(counts(pr, state.sens, state.fpr).post, state.extraLR); };
+
+    var d = '';
+    for (var i = 0; i <= 120; i++){
+      var pr = (i / 120) * 0.5;
+      d += (i ? 'L' : 'M') + X(pr).toFixed(1) + ' ' + Y(at(pr)).toFixed(1) + ' ';
+    }
+
+    var cur = adjustedPrior();
+    var ty = Y(state.threshold / 100);
+    var s = '';
+
+    [0, .25, .5, .75, 1].forEach(function(v){
+      s += '<line x1="' + pad.l + '" y1="' + Y(v) + '" x2="' + (w - pad.r) + '" y2="' + Y(v) +
+           '" stroke="#B3BCC0" stroke-width="1"/>' +
+           '<text x="' + (pad.l - 8) + '" y="' + (Y(v) + 4) + '" text-anchor="end" font-family="ui-monospace,Menlo,monospace" font-size="10" fill="#6B7981">' +
+           (v * 100) + '</text>';
+    });
+    [0, .12, .25, .375, .5].forEach(function(v){
+      s += '<text x="' + X(v) + '" y="' + (h - 28) + '" text-anchor="middle" font-family="ui-monospace,Menlo,monospace" font-size="10" fill="#6B7981">' +
+           Math.round(v * 100) + '</text>';
+    });
+
+    /* HEPI reference */
+    s += '<line x1="' + X(0.12) + '" y1="' + pad.t + '" x2="' + X(0.12) + '" y2="' + (h - pad.b) +
+         '" stroke="#6B7981" stroke-width="1" stroke-dasharray="3 3"/>';
+    s += '<text x="' + (X(0.12) + 6) + '" y="' + (pad.t + 11) + '" font-family="ui-monospace,Menlo,monospace" font-size="9.5" fill="#6B7981">HEPI 12</text>';
+
+    /* threshold */
+    s += '<line x1="' + pad.l + '" y1="' + ty + '" x2="' + (w - pad.r) + '" y2="' + ty +
+         '" stroke="#E8C547" stroke-width="3"/>';
+    s += '<text x="' + (w - pad.r) + '" y="' + (ty - 7) + '" text-anchor="end" font-family="ui-monospace,Menlo,monospace" font-size="10" font-weight="600" fill="#14191E">your bar &middot; ' + state.threshold + '%</text>';
+
+    s += '<path d="' + d + '" fill="none" stroke="#14191E" stroke-width="2.5"/>';
+    s += '<circle cx="' + X(Math.min(cur, .5)) + '" cy="' + Y(at(cur)) + '" r="6" fill="#C8372A" stroke="#14191E" stroke-width="2"/>';
+
+    s += '<text x="' + pad.l + '" y="' + (h - 8) + '" font-family="ui-monospace,Menlo,monospace" font-size="9.5" letter-spacing="0.06em" fill="#6B7981">ASSUMED BASE RATE, IN 100</text>';
+    s += '<text x="' + (pad.l - 8) + '" y="' + (pad.t - 6) + '" text-anchor="end" font-family="ui-monospace,Menlo,monospace" font-size="9.5" fill="#6B7981">%</text>';
+
+    $('sweep').innerHTML = s;
+
+    var lo = at(Math.max(0.01, cur * 0.5));
+    var hi = at(Math.min(0.5, cur * 2));
+    var stable = (lo * 100 >= state.threshold) === (hi * 100 >= state.threshold);
+    $('robustLine').innerHTML = stable
+      ? 'Halve your base rate or double it and the answer stays on the same side of your bar: <b>' +
+        pct(lo) + '</b> to <b>' + pct(hi) + '</b>. Your conclusion does not depend on getting the base rate exactly right.'
+      : 'Your conclusion is fragile. Between <b>' + pct(lo) + '</b> and <b>' + pct(hi) +
+        '</b> it crosses your bar, so halving or doubling the base rate flips the decision. Get a firmer base rate before you rely on this.';
+  }
+
+  function renderNote(c){
+    var src = document.querySelector('input[name=src]:checked').value;
+    var names = {vendor: "vendor's published figures", independent: 'independent testing (Weber-Wulff et al., 2023)', nonnative: 'non-native writer figures (Liang et al., 2023)'};
+    var p2 = withExtra(c.post, state.extraLR);
+    var over = p2 * 100 >= state.threshold;
+    var boxes = document.querySelectorAll('.ev2'), extra = [];
+    for (var i = 0; i < boxes.length; i++){
+      if (boxes[i].checked) extra.push(boxes[i].parentNode.querySelector('.opt-txt').childNodes[0].textContent.trim());
+    }
+    $('caseNote').textContent =
+      'REASONABLE DOUBT — CASE NOTE\n' +
+      new Date().toISOString().slice(0, 10) + '\n' +
+      '------------------------------------------\n' +
+      'Base rate assumed        ' + Math.round(adjustedPrior() * 100) + ' in 100\n' +
+      'Threshold set in advance ' + state.threshold + '%\n' +
+      'Detector figures used    ' + names[src] + '\n' +
+      '  sensitivity            ' + state.sens + '%\n' +
+      '  false positive rate    ' + state.fpr + '%\n' +
+      '------------------------------------------\n' +
+      'Per 1,000 submissions: ' + c.flagged + ' flagged, of which\n' +
+      c.tp + ' used AI and ' + c.fp + ' did not.\n\n' +
+      'Detector alone           ' + pct(c.post) + '\n' +
+      (extra.length ? 'Further evidence:\n  - ' + extra.join('\n  - ') + '\n' : 'Further evidence: none\n') +
+      'Overall                  ' + pct(p2) + '\n\n' +
+      'OUTCOME: ' + (over ? 'meets' : 'does NOT meet') + ' the threshold set before the score was seen.\n\n' +
+      'The threshold was recorded before the detector reading was\n' +
+      'viewed. This note is a reasoning record, not a finding.';
+  }
+
+  /* ── unlocking ── */
+  function unlock(id, stage){
+    var el = $(id);
+    if (!el.classList.contains('locked')) return;
+    el.classList.remove('locked');
+    state.stage = Math.max(state.stage, stage);
+    paint();
+    if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches){
+      el.scrollIntoView({behavior: 'smooth', block: 'center'});
+    }
+  }
+
+  /* ── step 1 ── */
+  $('priorRange').addEventListener('input', function(){
+    state.basePrior = +this.value;
+    $('priorOut').textContent = this.value + ' in 100';
+    paint();
+  });
+  $('priorLock').addEventListener('click', function(){
+    var g = state.basePrior;
+    $('priorNote').classList.remove('hidden');
+    var diff = g - HEPI;
+    $('priorCompare').textContent = 'You said ' + g + ' in 100. The survey says 12.';
+    $('priorGap').textContent = diff > 4
+      ? ' You are ' + (g / HEPI).toFixed(1) + '× above the reported figure — the usual direction, because the cases you remember are the ones that surfaced, not the ones that did not.'
+      : (diff < -4
+        ? ' You are below the reported figure. Worth asking what makes your module unusual.'
+        : ' That is close to the reported figure.');
+    this.textContent = 'Estimate committed';
+    this.disabled = true;
+    unlock('s2', 2);
+  });
+
+  /* ── step 2 ── */
+  ['adjTakehome', 'adjSupervised', 'adjPrior'].forEach(function(id){
+    $(id).addEventListener('change', paint);
+  });
+  $('adjNext').addEventListener('click', function(){ unlock('s3', 3); });
+
+  /* ── step 3 ── */
+  function humanise(t){
+    var wrong = Math.round((100 - t) / 1);
+    var oneIn = (100 / (100 - t));
+    return 'At ' + t + '%, you are saying: if I open a case every time the evidence looks like this, about ' +
+      wrong + ' in every 100 people I report will have done nothing wrong — roughly one in ' +
+      oneIn.toFixed(1) + '. That is the price of the standard, and it is the same price whether or not you say it out loud.';
+  }
+  $('threshRange').addEventListener('input', function(){
+    state.threshold = +this.value;
+    $('threshOut').textContent = this.value + '%';
+    $('threshHuman').textContent = humanise(state.threshold);
+    paint();
+  });
+  $('threshHuman').textContent = humanise(80);
+  $('threshLock').addEventListener('click', function(){
+    state.thresholdLocked = true;
+    $('threshRange').disabled = true;
+    this.textContent = 'Threshold locked at ' + state.threshold + '%';
+    this.disabled = true;
+    unlock('s4', 4);
+  });
+
+  /* ── step 4 ── */
+  function syncSourceCards(){
+    document.querySelectorAll('.src').forEach(function(l){
+      l.classList.toggle('sel', l.querySelector('input').checked);
+    });
+  }
+  document.querySelectorAll('input[name=src]').forEach(function(r){
+    r.addEventListener('change', function(){
+      var p = PRESETS[this.value];
+      state.sens = p.sens; state.fpr = p.fpr;
+      $('sensRange').value = p.sens; $('fprRange').value = p.fpr;
+      $('sensOut').textContent = p.sens + '%'; $('fprOut').textContent = p.fpr + '%';
+      syncSourceCards();
+      paint();
+    });
+  });
+  $('sensRange').addEventListener('input', function(){
+    state.sens = +this.value; $('sensOut').textContent = this.value + '%'; paint();
+  });
+  $('fprRange').addEventListener('input', function(){
+    state.fpr = +this.value; $('fprOut').textContent = this.value + '%'; paint();
+  });
+  $('evNext').addEventListener('click', function(){ unlock('s5', 5); });
+
+  /* ── steps 5–7 ── */
+  $('resNext').addEventListener('click', function(){ unlock('s6', 6); });
+  document.querySelectorAll('.ev2').forEach(function(b){ b.addEventListener('change', paint); });
+  $('needNext').addEventListener('click', function(){ unlock('s7', 7); });
+
+  $('copyBtn').addEventListener('click', function(){
+    var btn = this, txt = $('caseNote').textContent;
+    var done = function(){ btn.textContent = 'Copied'; setTimeout(function(){ btn.textContent = 'Copy case note'; }, 1800); };
+    if (navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(txt).then(done, function(){ btn.textContent = 'Select the text above'; });
+    } else {
+      var r = document.createRange(); r.selectNode($('caseNote'));
+      window.getSelection().removeAllRanges(); window.getSelection().addRange(r);
+      btn.textContent = 'Selected — press ⌘C';
+    }
+  });
+
+  $('resetBtn').addEventListener('click', function(){ location.reload(); });
+
+  syncSourceCards();
+  paint();
+})();
+</script>
+</body>
+</html>
