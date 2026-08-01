@@ -2,3 +2,6 @@
 # Anything public gets crawled and indexed, and a similarity checker will later
 # match the submitted essay against this repository as an "internet source".
 docs/
+
+# macOS
+.DS_Store
