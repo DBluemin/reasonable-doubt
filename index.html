@@ -144,6 +144,7 @@ input[type=range]::-webkit-slider-thumb{
 }
 input[type=range]::-moz-range-thumb{width:16px;height:26px;background:var(--ink);border:none;border-radius:0}
 input[type=range]:focus-visible{outline:3px solid var(--marker);outline-offset:3px}
+input[type=range]:disabled{cursor:not-allowed;opacity:.4}
 .scale{display:flex;justify-content:space-between;font-family:var(--mono);font-size:.66rem;color:var(--ink-3);margin-top:2px}
 
 .btn{
@@ -417,11 +418,12 @@ input[type=range]:focus-visible{outline:3px solid var(--marker);outline-offset:3
       <!-- 4 -->
       <section class="step locked" id="s4">
         <div class="step-head"><span class="step-num">04</span><h2>Now the detector</h2></div>
-        <p>The submission has been flagged. Before that flag means anything, you have to say how good the detector is, and the published answers disagree with each other enormously.</p>
+        <p>The submission has been flagged. That flag only means something once you say how accurate the detector is, and the published figures disagree with each other enormously.</p>
+        <p><strong>Pick the set of figures you are willing to defend.</strong> Nothing is selected for you, because this choice decides the answer more than the detector reading does.</p>
 
         <div class="sources" role="radiogroup" aria-label="Which accuracy figures to use">
-          <label class="src sel">
-            <input type="radio" name="src" value="vendor" checked>
+          <label class="src">
+            <input type="radio" name="src" value="vendor">
             <span class="src-in">
               <span class="src-name">The vendor's own figures<span class="src-fig">98% sens · 1% FPR<span class="modflag">edited</span></span></span>
               <span class="src-why">Turnitin reports a document-level false positive rate below 1% where 20% or more of the document is flagged. Below that 20% mark it reports a higher incidence of false positives and has not published a rate.</span>
@@ -446,16 +448,16 @@ input[type=range]:focus-visible{outline:3px solid var(--marker);outline-offset:3
         <div class="control">
           <div class="control-top">
             <span class="control-label">Sensitivity (flags actual AI use)</span>
-            <span class="readout" id="sensOut">98%</span>
+            <span class="readout" id="sensOut">&mdash;</span>
           </div>
-          <input type="range" id="sensRange" min="10" max="100" value="98" aria-label="Sensitivity, the percentage of AI-written work the detector flags">
+          <input type="range" id="sensRange" min="10" max="100" value="98" disabled aria-label="Sensitivity, the percentage of AI-written work the detector flags">
         </div>
         <div class="control">
           <div class="control-top">
             <span class="control-label">False positive rate (flags honest work)</span>
-            <span class="readout" id="fprOut">1%</span>
+            <span class="readout" id="fprOut">&mdash;</span>
           </div>
-          <input type="range" id="fprRange" min="0" max="70" value="1" aria-label="False positive rate, the percentage of honest work the detector flags">
+          <input type="range" id="fprRange" min="0" max="70" value="1" disabled aria-label="False positive rate, the percentage of honest work the detector flags">
         </div>
         <details class="why">
           <summary>Can I move the sliders after picking a source?</summary>
@@ -464,7 +466,7 @@ input[type=range]:focus-visible{outline:3px solid var(--marker);outline-offset:3
             <p>Once you move a slider the card is marked "edited", so you always know whether you are still standing on published numbers or on your own assumption.</p>
           </div>
         </details>
-        <button class="btn" id="evNext">See what the flag is worth</button>
+        <button class="btn" id="evNext" disabled>Choose a source first</button>
       </section>
 
       <!-- 5 -->
@@ -562,8 +564,8 @@ input[type=range]:focus-visible{outline:3px solid var(--marker);outline-offset:3
     basePrior: 30,
     threshold: 80,
     thresholdLocked: false,
-    sens: 98,
-    fpr: 1,
+    sens: null,
+    fpr: null,
     stage: 1,
     extraLR: 1
   };
@@ -630,8 +632,9 @@ input[type=range]:focus-visible{outline:3px solid var(--marker);outline-offset:3
   /* ── render ── */
   function paint(){
     var prior = adjustedPrior();
-    var c = counts(prior, state.sens, state.fpr);
-    var showEvidence = state.stage >= 5;
+    var chosen = state.sens !== null && state.fpr !== null;
+    var c = counts(prior, chosen ? state.sens : 0, chosen ? state.fpr : 0);
+    var showEvidence = state.stage >= 5 && chosen;
 
     for (var i = 0; i < N; i++){
       var cls;
@@ -803,7 +806,8 @@ input[type=range]:focus-visible{outline:3px solid var(--marker);outline-offset:3
   }
 
   function renderNote(c){
-    var src = document.querySelector('input[name=src]:checked').value;
+    var picked = document.querySelector('input[name=src]:checked');
+    var src = picked ? picked.value : 'vendor';
     var names = {vendor: "vendor's published figures", independent: 'independent testing (Weber-Wulff et al., 2023)', nonnative: 'non-native writer figures (Liang et al., 2023)'};
     var p2 = withExtra(c.post, state.extraLR);
     var over = p2 * 100 >= state.threshold;
@@ -899,7 +903,8 @@ input[type=range]:focus-visible{outline:3px solid var(--marker);outline-offset:3
     document.querySelectorAll('.src').forEach(function(l){
       var input = l.querySelector('input');
       var preset = PRESETS[input.value];
-      var edited = input.checked && (state.sens !== preset.sens || state.fpr !== preset.fpr);
+      var edited = input.checked && state.sens !== null &&
+                   (state.sens !== preset.sens || state.fpr !== preset.fpr);
       l.classList.toggle('sel', input.checked);
       l.classList.toggle('modified', edited);
     });
@@ -919,7 +924,10 @@ input[type=range]:focus-visible{outline:3px solid var(--marker);outline-offset:3
       var p = PRESETS[this.value];
       state.sens = p.sens; state.fpr = p.fpr;
       $('sensRange').value = p.sens; $('fprRange').value = p.fpr;
+      $('sensRange').disabled = false; $('fprRange').disabled = false;
       $('sensOut').textContent = p.sens + '%'; $('fprOut').textContent = p.fpr + '%';
+      $('evNext').disabled = false;
+      $('evNext').textContent = 'See what the flag is worth';
       syncSourceCards();
       paint();
     });
