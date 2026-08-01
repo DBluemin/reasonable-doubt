@@ -316,7 +316,7 @@ input[type=range]:disabled{cursor:not-allowed;opacity:.4}
         <div class="bar">
           <div class="bar-tp" id="barTp" style="width:0"></div>
           <div class="bar-fp" id="barFp" style="width:0"></div>
-          <div class="thresh" id="threshLine" data-label="your bar"></div>
+          <div class="thresh" id="threshLine" data-label="your standard"></div>
         </div>
         <div class="bar-read">
           <span id="barLeft">—</span>
@@ -445,27 +445,28 @@ input[type=range]:disabled{cursor:not-allowed;opacity:.4}
           </label>
         </div>
 
-        <div class="control">
-          <div class="control-top">
-            <span class="control-label">Sensitivity (flags actual AI use)</span>
-            <span class="readout" id="sensOut">&mdash;</span>
-          </div>
-          <input type="range" id="sensRange" min="10" max="100" value="98" disabled aria-label="Sensitivity, the percentage of AI-written work the detector flags">
-        </div>
-        <div class="control">
-          <div class="control-top">
-            <span class="control-label">False positive rate (flags honest work)</span>
-            <span class="readout" id="fprOut">&mdash;</span>
-          </div>
-          <input type="range" id="fprRange" min="0" max="70" value="1" disabled aria-label="False positive rate, the percentage of honest work the detector flags">
-        </div>
-        <details class="why">
-          <summary>Can I move the sliders after picking a source?</summary>
+        <details class="why" id="whatIf">
+          <summary>What if these published figures are wrong?</summary>
           <div class="why-body">
-            <p>Yes, and that is the point. The three buttons load figures somebody actually published. The sliders let you ask what happens if those figures are wrong, which is the part no vendor sheet will tell you.</p>
-            <p>Once you move a slider the card is marked "edited", so you always know whether you are still standing on published numbers or on your own assumption.</p>
+            <p>Nobody auditing a detector has to accept the numbers it ships with. Move these to find out how wrong a figure would have to be before your conclusion changes.</p>
+            <div class="control">
+              <div class="control-top">
+                <span class="control-label">Sensitivity (flags actual AI use)</span>
+                <span class="readout" id="sensOut">&mdash;</span>
+              </div>
+              <input type="range" id="sensRange" min="10" max="100" value="98" disabled aria-label="Sensitivity, the percentage of AI-written work the detector flags">
+            </div>
+            <div class="control">
+              <div class="control-top">
+                <span class="control-label">False positive rate (flags honest work)</span>
+                <span class="readout" id="fprOut">&mdash;</span>
+              </div>
+              <input type="range" id="fprRange" min="0" max="70" value="1" disabled aria-label="False positive rate, the percentage of honest work the detector flags">
+            </div>
+            <p>Once you move either one, the card above is marked "edited" so you always know whether you are standing on published figures or on your own assumption.</p>
           </div>
         </details>
+
         <button class="btn" id="evNext" disabled>Choose a source first</button>
       </section>
 
@@ -473,10 +474,11 @@ input[type=range]:disabled{cursor:not-allowed;opacity:.4}
       <section class="step locked" id="s5">
         <div class="step-head"><span class="step-num">05</span><h2>What the flag is worth</h2></div>
         <div class="verdict">
-          <span class="stamp no" id="stamp">Below your bar</span>
+          <span class="stamp no" id="stamp">Below your standard</span>
           <p class="verdict-fig" id="postOut">—</p>
           <p class="verdict-sub">probability this flagged student used AI</p>
           <div class="verdict-line" id="verdictLine"></div>
+          <div class="verdict-line" id="attribLine"></div>
         </div>
         <div class="nextstep">
           <h3>What to do now</h3>
@@ -486,12 +488,12 @@ input[type=range]:disabled{cursor:not-allowed;opacity:.4}
         <div class="note">
           <strong>The disagreement is not about this student.</strong> Hold everything else fixed and switch between the three sources in question 04. The same flag on the same submission is worth <b id="swingVendor">—</b>, <b id="swingInd">—</b> or <b id="swingNn">—</b>. Nobody has told you which set of figures your institution's procedure assumes.
         </div>
-        <button class="btn" id="resNext">What would clear your bar?</button>
+        <button class="btn" id="resNext">What would meet your standard?</button>
       </section>
 
       <!-- 6 -->
       <section class="step locked" id="s6">
-        <div class="step-head"><span class="step-num">06</span><h2>What would actually clear your bar</h2></div>
+        <div class="step-head"><span class="step-num">06</span><h2>What would actually meet your standard</h2></div>
         <p id="needLine"></p>
         <div class="opts">
           <label class="opt"><input type="checkbox" class="ev2" data-lr="9"><span class="opt-txt">Document version history shows the text pasted in whole<small>strong · odds &times; 9</small></span></label>
@@ -503,7 +505,7 @@ input[type=range]:disabled{cursor:not-allowed;opacity:.4}
           <strong>A second detector is not a second opinion.</strong> Running another tool over the same text does not multiply in, because the two tools react to the same surface features, so their errors arrive together. Treating correlated evidence as independent is the fastest way to manufacture certainty you have not earned. Every item above is listed because it comes from a different source than the text itself.
         </div>
         <div class="verdict">
-          <span class="stamp no" id="stamp2">Below your bar</span>
+          <span class="stamp no" id="stamp2">Below your standard</span>
           <p class="verdict-fig" id="post2Out">—</p>
           <p class="verdict-sub">after the evidence you have ticked</p>
           <div class="verdict-line" id="verdict2Line"></div>
@@ -667,7 +669,7 @@ input[type=range]:disabled{cursor:not-allowed;opacity:.4}
       if (state.thresholdLocked){
         $('threshLine').classList.add('on');
         $('threshLine').style.left = state.threshold + '%';
-        $('threshLine').setAttribute('data-label', 'your bar · ' + state.threshold + '%');
+        $('threshLine').setAttribute('data-label', 'your standard · ' + state.threshold + '%');
       }
     } else {
       wrap.classList.remove('on');
@@ -690,14 +692,14 @@ input[type=range]:disabled{cursor:not-allowed;opacity:.4}
     $('postOut').textContent = pct(p);
     $('postOut').style.color = over ? 'var(--machine)' : 'var(--flag)';
     var st = $('stamp');
-    st.textContent = over ? 'Clears your bar' : 'Below your bar';
+    st.textContent = over ? 'Meets your standard' : 'Below your standard';
     st.className = 'stamp ' + (over ? 'yes' : 'no');
 
     $('verdictLine').innerHTML = over
-      ? 'You set your bar at <b>' + state.threshold + '%</b>. This flag reaches <b>' + pct(p) +
+      ? 'You set your standard at <b>' + state.threshold + '%</b>. This flag reaches <b>' + pct(p) +
         '</b>. On your own stated standard, this is enough to open a case, and roughly <b>' + c.fp +
         '</b> of the ' + c.flagged + ' flagged students in a cohort this size still did nothing wrong.'
-      : 'You set your bar at <b>' + state.threshold + '%</b>. This flag reaches <b>' + pct(p) +
+      : 'You set your standard at <b>' + state.threshold + '%</b>. This flag reaches <b>' + pct(p) +
         '</b>. It does not clear the standard you set for yourself sixty seconds ago, before you knew which way it would fall.';
 
     var v = posteriorFor(PRESETS.vendor.sens, PRESETS.vendor.fpr);
@@ -707,8 +709,20 @@ input[type=range]:disabled{cursor:not-allowed;opacity:.4}
     $('swingInd').textContent = pct(i);
     $('swingNn').textContent = pct(n);
 
+    /* Users distrusted a high result without being able to see that their own
+       base rate, not the detector, was producing it. So attribute it. */
+    var atSurvey = counts(HEPI / 100, state.sens, state.fpr).post;
+    var mine = Math.round(adjustedPrior() * 100);
+    $('attribLine').innerHTML = Math.abs(atSurvey - p) < 0.02
+      ? 'This figure is driven by the detector rather than by your base rate. At the surveyed rate of ' +
+        HEPI + ' in 100 the same detector figures still give <b>' + pct(atSurvey) + '</b>.'
+      : 'Most of this figure comes from the base rate you set, not from the detector. You assumed <b>' +
+        mine + ' in 100</b>. At the surveyed <b>' + HEPI + ' in 100</b> the same detector figures give <b>' +
+        pct(atSurvey) + '</b>' +
+        ((atSurvey * 100 >= state.threshold) === over ? '.' : ', which lands on the other side of your standard.');
+
     $('nextStep').innerHTML = over
-      ? 'This clears the bar you set, so a referral is defensible. Before you file it, give the student the chance to explain the work in their own words, and put the case note below in the file so the standard you used is on the record.'
+      ? 'This meets the standard you set, so a referral is defensible. Before you file it, give the student the chance to explain the work in their own words, and put the case note below in the file so the standard you used is on the record.'
       : 'A referral is not the proportionate next step here. Ask the student to talk you through their argument and show you their drafts. That conversation is also evidence, and unlike a second detector it is independent of the text.';
 
     var spread = Math.round((Math.max(v, i, n) - Math.min(v, i, n)) * 100);
@@ -729,23 +743,23 @@ input[type=range]:disabled{cursor:not-allowed;opacity:.4}
     $('post2Out').textContent = pct(p2);
     $('post2Out').style.color = over ? 'var(--machine)' : 'var(--flag)';
     var st = $('stamp2');
-    st.textContent = over ? 'Clears your bar' : 'Below your bar';
+    st.textContent = over ? 'Meets your standard' : 'Below your standard';
     st.className = 'stamp ' + (over ? 'yes' : 'no');
 
     $('verdict2Line').innerHTML = n === 0
       ? 'Nothing ticked. This is still the detector on its own.'
       : (over
         ? 'With ' + n + ' further ' + (n === 1 ? 'source' : 'sources') + ' of evidence you are at <b>' +
-          pct(p2) + '</b>, above your <b>' + state.threshold + '%</b> bar. Each item is independent of the text the detector read.'
+          pct(p2) + '</b>, above your <b>' + state.threshold + '%</b> standard. Each item is independent of the text the detector read.'
         : 'With ' + n + ' further ' + (n === 1 ? 'source' : 'sources') + ' you reach <b>' + pct(p2) +
-          '</b>, still under your <b>' + state.threshold + '%</b> bar.');
+          '</b>, still under your <b>' + state.threshold + '%</b> standard.');
 
     var need = (state.threshold / 100) / (1 - state.threshold / 100) / (c.post / (1 - c.post));
     $('needLine').innerHTML = c.post > 0 && need > 1
       ? 'To move from <b>' + pct(c.post) + '</b> to your <b>' + state.threshold +
-        '%</b> bar, the evidence you add has to be roughly <b>' + (need < 100 ? need.toFixed(1) : '100+') +
+        '%</b> standard, the evidence you add has to be roughly <b>' + (need < 100 ? need.toFixed(1) : '100+') +
         '&times;</b> more likely if the student did use AI than if they did not. Tick what you actually hold.'
-      : 'You are already at or above your bar on the detector alone. Anything below is corroboration, not rescue.';
+      : 'You are already at or above your standard on the detector alone. Anything below is corroboration, not rescue.';
   }
 
   function renderSweep(){
@@ -785,7 +799,7 @@ input[type=range]:disabled{cursor:not-allowed;opacity:.4}
     /* threshold */
     s += '<line x1="' + pad.l + '" y1="' + ty + '" x2="' + (w - pad.r) + '" y2="' + ty +
          '" stroke="#E8C547" stroke-width="3"/>';
-    s += '<text x="' + (w - pad.r) + '" y="' + (ty - 7) + '" text-anchor="end" font-family="ui-monospace,Menlo,monospace" font-size="10" font-weight="600" fill="#14191E">your bar &middot; ' + state.threshold + '%</text>';
+    s += '<text x="' + (w - pad.r) + '" y="' + (ty - 7) + '" text-anchor="end" font-family="ui-monospace,Menlo,monospace" font-size="10" font-weight="600" fill="#14191E">your standard &middot; ' + state.threshold + '%</text>';
 
     s += '<path d="' + d + '" fill="none" stroke="#14191E" stroke-width="2.5"/>';
     s += '<circle cx="' + X(Math.min(cur, .5)) + '" cy="' + Y(at(cur)) + '" r="6" fill="#C8372A" stroke="#14191E" stroke-width="2"/>';
@@ -799,10 +813,10 @@ input[type=range]:disabled{cursor:not-allowed;opacity:.4}
     var hi = at(Math.min(0.5, cur * 2));
     var stable = (lo * 100 >= state.threshold) === (hi * 100 >= state.threshold);
     $('robustLine').innerHTML = stable
-      ? 'Halve your base rate or double it and the answer stays on the same side of your bar, from <b>' +
+      ? 'Halve your base rate or double it and the answer stays on the same side of your standard, from <b>' +
         pct(lo) + '</b> to <b>' + pct(hi) + '</b>. Your conclusion does not depend on getting the base rate exactly right.'
       : 'Your conclusion is fragile. Between <b>' + pct(lo) + '</b> and <b>' + pct(hi) +
-        '</b> it crosses your bar, so halving or doubling the base rate flips the decision. Get a firmer base rate before you rely on this.';
+        '</b> it crosses your standard, so halving or doubling the base rate flips the decision. Get a firmer base rate before you rely on this.';
   }
 
   function renderNote(c){
